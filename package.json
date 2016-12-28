@@ -1,0 +1,22 @@
+{
+  "name": "pogocontroller",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server/app.js",
+    "serve": "nodemon -V -w server/app.js server/app.js",
+    "build": "webpack --config webpack.config.js --progress --color --profile --watch"
+  },
+  "devDependencies": {
+    "webpack": "2.1.0-beta.27"
+  },
+  "dependencies": {
+    "body-parser": "~1.15.2",
+    "chance": "~1.0.4",
+    "cookie-parser": "~1.4.3",
+    "express": "~4.14.0",
+    "lodash": "^4.17.2",
+    "nodemon": "~1.11.0",
+    "qwest": "4.4.5"
+  }
+}
