@@ -35,7 +35,7 @@ var throttledUpdateLocation = _.throttle(function(position) {
       // setCurrentLocation(response);
     }
   });
-}, 250);
+}, 375);
 
 function updateLocation(position) {
   console.log('about to update location...');

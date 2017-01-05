@@ -12,7 +12,7 @@ module.exports = {
   updateLocation: function(position, callback) {
     var addr = '/set-location?lat=' + position.lat + '&lng=' + position.lng;
 
-    qwest.get(addr).then(function (xhr, response) {
+    qwest.put(addr).then(function (xhr, response) {
       callback(undefined, response);
     }).catch(function (err) {
       callback(err);
