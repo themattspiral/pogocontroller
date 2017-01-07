@@ -8,7 +8,7 @@
     "build": "webpack --config webpack.config.js --progress --color --profile --watch"
   },
   "devDependencies": {
-    "webpack": "2.1.0-beta.27"
+    "webpack": "2.2.0-rc.3"
   },
   "dependencies": {
     "body-parser": "~1.15.2",
