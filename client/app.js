@@ -1,5 +1,4 @@
 import {throttle} from 'lodash';
-
 import locationService from './services/location';
 import walking from './utils/walking';
 
@@ -8,7 +7,7 @@ const UPDATE_THROTTLE_LIMIT_MS = 375;
 
 var currentLocation,
   locationMarker,
-  map;
+  gmap;
 
 const throttledPushLocationUpdate = throttle((position) => {
   locationService.updateLocation(position, (err) => {
@@ -39,15 +38,16 @@ function updateLocationTo(location) {
 }
 
 function initMap(initialLocation) {
-  map = new google.maps.Map(document.getElementById('map'), {
+  gmap = new google.maps.Map(document.getElementById('map'), {
     zoom: 18,
-    center: initialLocation
+    center: initialLocation,
+    streetViewControl: false
   });
 
   locationMarker = new google.maps.Marker({
     position: initialLocation,
     draggable: true,
-    map: map,
+    map: gmap,
     title: 'Current Location'
   });
 
