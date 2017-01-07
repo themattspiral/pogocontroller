@@ -102,7 +102,7 @@ app.post('/location/reset', (req, res) => {
   res.json(LOCATION);
 });
 
-app.put('/set-location', (req, res) => {
+app.put('/location', (req, res) => {
   const lat = Number(req.query.lat),
       lng = Number(req.query.lng);
 
