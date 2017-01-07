@@ -1,1 +1,13 @@
+# Intellij IDEA project files and/or directory
+*.iml
+*.ipr
+*.iws
+.idea
+
+# build
+npm-debug.log
+node_modules
+
+# app
 public/app.js
+pokemonLocation.gpx
