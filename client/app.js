@@ -1,19 +1,26 @@
-var locationService = require('./services/location'),
-  qwest = require('qwest'),
-  _ = require('lodash'),
-  Chance = require('chance'),
-  chance = new Chance(),
+import {throttle} from 'lodash';
 
-  walkSpeed = {
-    slow: function() {return chance.floating({fixed:12, min: 0.0000009, max: 0.0000013});},
-    medium: function() {return chance.floating({fixed:12, min: 0.000001, max: 0.000002});},
-    fast: function() {return chance.floating({fixed:12, min: 0.000002, max: 0.000003});},
-    faster: function() {return chance.floating({fixed:12, min: 0.000004, max: 0.000005});}
-  },
+import locationService from './services/location';
+import walking from './utils/walking';
 
-  currentLocation,
+const CURRENT_WALK_SPEED = walking.WALK_SPEEDS.faster;
+const UPDATE_THROTTLE_LIMIT_MS = 375;
+
+var currentLocation,
   locationMarker,
   map;
+
+const throttledPushLocationUpdate = throttle((position) => {
+  locationService.updateLocation(position, (err) => {
+    if (err) {
+      console.log('Error updating location:');
+      console.log(err);
+
+      // reset
+      locationMarker.setPosition(currentLocation);
+    }
+  });
+}, UPDATE_THROTTLE_LIMIT_MS);
 
 function setCurrentLocation(position) {
   currentLocation = {
@@ -22,27 +29,13 @@ function setCurrentLocation(position) {
   };
 }
 
-var throttledUpdateLocation = _.throttle(function(position) {
-  locationService.updateLocation(position, function(err, response) {
-    if (err) {
-      console.log('Error updating location:');
-      console.log(err);
+function updateLocationTo(location) {
+  locationMarker.setPosition(location);
 
-      // reset
-      locationMarker.setPosition(currentLocation);
-    } else {
-      console.log('updated server location');
-      // setCurrentLocation(response);
-    }
-  });
-}, 375);
+  // optimistically update in-memory location before confirming that server update was successful
+  setCurrentLocation(location);
 
-function updateLocation(position) {
-  console.log('about to update location...');
-  locationMarker.setPosition(position);
-  setCurrentLocation(position); // optimistic
-
-  throttledUpdateLocation(position);
+  throttledPushLocationUpdate(location);
 }
 
 function initMap(initialLocation) {
@@ -58,10 +51,10 @@ function initMap(initialLocation) {
     title: 'Current Location'
   });
 
-  google.maps.event.addListener(locationMarker, 'dragend', function () {
-    var position = locationMarker.getPosition();
+  google.maps.event.addListener(locationMarker, 'dragend', () => {
+    let position = locationMarker.getPosition();
 
-    updateLocation({
+    updateLocationTo({
       lat: position.lat(),
       lng: position.lng()
     });
@@ -69,12 +62,7 @@ function initMap(initialLocation) {
 }
 
 function initLocation() {
-  qwest.setDefaultOptions({
-    dataType: 'json',
-    responseType: 'json'
-  });
-
-  locationService.getLocation(function (err, response) {
+  locationService.getLocation((err, response) => {
     if (err) {
       console.log('Error fetching location:');
       console.log(err);
@@ -85,76 +73,54 @@ function initLocation() {
   });
 }
 
-document.onkeypress = function (evt) {
-  var coordDelta = walkSpeed.faster();
-  var jitter = chance.floating({fixed:12, min: 0.000000001, max: 0.000000003});
-  var b = chance.bool();
+document.onkeypress = (evt) => {
+  let changedLocation;
 
   switch (evt.which) {
-    // w or W - North
+    // w or W
     case 87:
     case 119:
-      updateLocation({
-        lat: currentLocation.lat + coordDelta,
-        lng: b ? currentLocation.lng + jitter : currentLocation.lng - jitter
-      });
+      changedLocation = walking.stepNorth(currentLocation, CURRENT_WALK_SPEED);
       break;
-    // a or A - West
+    // a or A
     case 65:
     case 97:
-      updateLocation({
-        lat: b ? currentLocation.lat + jitter : currentLocation.lat - jitter,
-        lng: currentLocation.lng - coordDelta
-      });
+      changedLocation = walking.stepWest(currentLocation, CURRENT_WALK_SPEED);
       break;
-    // s or S - South
+    // s or S
     case 83:
     case 115:
-      updateLocation({
-        lat: currentLocation.lat - coordDelta,
-        lng: b ? currentLocation.lng + jitter : currentLocation.lng - jitter
-      });
+      changedLocation = walking.stepSouth(currentLocation, CURRENT_WALK_SPEED);
       break;
-    // d or D - East
+    // d or D
     case 68:
     case 100:
-      updateLocation({
-        lat: b ? currentLocation.lat + jitter : currentLocation.lat - jitter,
-        lng: currentLocation.lng + coordDelta
-      });
+      changedLocation = walking.stepEast(currentLocation, CURRENT_WALK_SPEED);
       break;
-    // q or Q - Northwest
+    // q or Q
     case 81:
     case 113:
-      updateLocation({
-        lat: currentLocation.lat + coordDelta,
-        lng: currentLocation.lng - coordDelta
-      });
+      changedLocation = walking.stepNorthwest(currentLocation, CURRENT_WALK_SPEED);
       break;
-    // e or E - Northeast
+    // e or E
     case 69:
     case 101:
-      updateLocation({
-        lat: currentLocation.lat + coordDelta,
-        lng: currentLocation.lng + coordDelta
-      });
+      changedLocation = walking.stepNortheast(currentLocation, CURRENT_WALK_SPEED);
       break;
-    // z or Z - Southwest
+    // z or Z
     case 90:
     case 122:
-      updateLocation({
-        lat: currentLocation.lat - coordDelta,
-        lng: currentLocation.lng - coordDelta
-      });
+      changedLocation = walking.stepSouthwest(currentLocation, CURRENT_WALK_SPEED);
       break;
-    // x or X - Southeast
+    // x or X
     case 88:
     case 120:
-      updateLocation({
-        lat: currentLocation.lat - coordDelta,
-        lng: currentLocation.lng + coordDelta
-      });
+      changedLocation = walking.stepSoutheast(currentLocation, CURRENT_WALK_SPEED);
       break;
+  }
+
+  if (changedLocation) {
+    updateLocationTo(changedLocation);
   }
 };
 
