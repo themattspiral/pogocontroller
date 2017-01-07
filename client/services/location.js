@@ -1,20 +1,20 @@
-var qwest = require('qwest');
+const qwest = require('qwest');
 
 module.exports = {
-  getLocation: function(callback) {
-    qwest.get('/location').then(function (xhr, response) {
+  getLocation: (callback) => {
+    qwest.get('/location').then((xhr, response) => {
       callback(undefined, response);
-    }).catch(function (err) {
+    }).catch((err) => {
       callback(err);
     });
   },
 
-  updateLocation: function(position, callback) {
-    var addr = '/location?lat=' + position.lat + '&lng=' + position.lng;
+  updateLocation: (position, callback) => {
+    let addr = '/location?lat=' + position.lat + '&lng=' + position.lng;
 
-    qwest.put(addr).then(function (xhr, response) {
+    qwest.put(addr).then((xhr, response) => {
       callback(undefined, response);
-    }).catch(function (err) {
+    }).catch((err) => {
       callback(err);
     });
   }

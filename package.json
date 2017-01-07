@@ -5,9 +5,14 @@
   "scripts": {
     "start": "node server/app.js",
     "serve": "nodemon -V -w server/app.js server/app.js",
-    "build": "webpack --config webpack.config.js --progress --color --profile --watch"
+    "build": "rimraf public && webpack --config webpack.config.js --progress --color --profile --watch"
   },
   "devDependencies": {
+    "babel-core": "^6.21.0",
+    "babel-loader": "^6.2.10",
+    "babel-preset-es2015": "^6.18.0",
+    "html-webpack-plugin": "^2.26.0",
+    "rimraf": "^2.5.4",
     "webpack": "2.2.0-rc.3"
   },
   "dependencies": {

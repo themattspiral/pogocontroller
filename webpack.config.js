@@ -1,4 +1,5 @@
 const webpack = require('webpack');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
   entry: {
@@ -8,7 +9,7 @@ module.exports = {
   output: {
       path: __dirname + '/public',
       publicPath: '/',
-      filename: '[name].js',
+      filename: '[name].[hash].js',
       chunkFilename: '[id].[hash].chunk.js'
   },
 
@@ -22,5 +23,26 @@ module.exports = {
 
   performance: {
     hints: false
-  }
+  },
+
+  module: {
+
+    rules: [
+      {
+        test: /\.js$/,
+        loader: "babel-loader",
+        exclude: /node_modules/
+      }
+    ]
+
+  },
+
+  plugins: [
+
+    new HtmlWebpackPlugin({
+      filename: 'index.html',
+      template: 'client/index.html'
+    }),
+
+  ]
 };
