@@ -33,9 +33,7 @@ var gmap,
   startWalkingControl,
   pauseWalkingControl,
   continueWalkingControl,
-  stopWalkingControl,
-
-  markers;
+  stopWalkingControl;
 
 const throttledPushLocationUpdate = throttle((location) => {
   locationService.updateLocation(location, (err) => {
@@ -108,6 +106,7 @@ function isCurrentLocationAtPoint(point) {
   let currentPoint = new google.maps.LatLng(currentLocation.lat, currentLocation.lng),
     dist = google.maps.geometry.spherical.computeDistanceBetween(currentPoint, point);
 
+  // TODO make this dynamic based on current step size
   return dist <= 0.8; // roughly 2 steps away, maybe a little more
 }
 
@@ -181,17 +180,6 @@ function startWalking() {
   walkingPointIndex = 0;
 
   console.log('Walking ' + walkingRoutePoints.length + ' points...');
-
-  // markers = [];
-  // for (let i = 0; i < walkingRoutePoints.length; i++) {
-  //   markers.push(new google.maps.Marker({
-  //     position: walkingRoutePoints[i],
-  //     map: gmap,
-  //     title: 'Route Marker ' + i,
-  //     label: i + ' ' + i + ' ' + i + ' ' + i,
-  //     icon: '//maps.google.com/mapfiles/ms/icons/blue-dot.png'
-  //   }));
-  // }
 
   continueWalking();
 }
