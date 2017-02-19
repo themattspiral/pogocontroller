@@ -1,4 +1,4 @@
-const qwest = require('qwest');
+import qwest from 'qwest';
 
 module.exports = {
   getLocation(callback) {
