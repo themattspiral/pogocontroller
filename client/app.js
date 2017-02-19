@@ -377,7 +377,7 @@ document.onkeypress = (evt) => {
       break;
 
     default:
-      console.log(evt.which);
+      break;
   }
 
   if (changedLocation) {
