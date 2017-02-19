@@ -1,12 +1,28 @@
 import Chance from 'chance';
-const chance = new Chance();
 
-const SPEEDS = {
-  slow() {return chance.floating({fixed:12, min: 0.0000009, max: 0.0000013});},
-  medium() {return chance.floating({fixed:12, min: 0.000001, max: 0.000002});},
-  fast() {return chance.floating({fixed:12, min: 0.000002, max: 0.000003});},
-  faster() {return chance.floating({fixed:12, min: 0.000004, max: 0.000005});}
-};
+const chance = new Chance(),
+      SPEEDS = {
+        slow() {
+          return chance.floating({
+            fixed:12, min: 0.0000009, max: 0.0000013
+          });
+        },
+        medium() {
+          return chance.floating({
+            fixed:12, min: 0.000001, max: 0.000002
+          });
+        },
+        fast() {
+          return chance.floating({
+            fixed:12, min: 0.000002, max: 0.000003
+          });
+        },
+        faster() {
+          return chance.floating({
+            fixed:12, min: 0.000004, max: 0.000005
+          });
+        }
+      };
 
 function getRandomness(speed) {
   return {
@@ -34,7 +50,7 @@ module.exports = {
     return {
       lat: r.jitterDirection ? currentLocation.lat + r.jitterDelta : currentLocation.lat - r.jitterDelta,
       lng: currentLocation.lng - r.coordDelta
-    }
+    };
   },
 
   stepSouth(currentLocation, speed) {

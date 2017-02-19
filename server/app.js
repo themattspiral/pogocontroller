@@ -1,34 +1,39 @@
 'use strict';
 
-const express = require('express');
-const path = require('path');
-const cookieParser = require('cookie-parser');
-const bodyParser = require('body-parser');
-const moment = require('moment');
-const child_process = require('child_process');
-const xmlbuilder = require('xmlbuilder');
-const fs = require('fs');
-const xml2js = require('xml2js');
+const express = require('express'),
+      path = require('path'),
+      cookieParser = require('cookie-parser'),
+      bodyParser = require('body-parser'),
+      moment = require('moment'),
+      childProcess = require('child_process'),
+      xmlbuilder = require('xmlbuilder'),
+      fs = require('fs'),
+      xml2js = require('xml2js'),
 
-const app = express();
+      LOCATION_FILE = 'pokemonLocation.gpx',
+      LOCATION_FILE_ENCODING = 'utf8',
+      DATE_FORMAT = 'YYYY-MM-DD HH:mm:ss',
+      DEFAULT_LOCATION = {lat: 41.865508, lng: -88.111535},
+      app = express();
 
-const LOCATION_FILE = 'pokemonLocation.gpx';
-const LOCATION_FILE_ENCODING = 'utf8';
-const DATE_FORMAT = 'YYYY-MM-DD HH:mm:ss';
-const DEFAULT_LOCATION = {lat: 41.865508, lng: -88.111535};
-
-let LOCATION = Object.assign({}, DEFAULT_LOCATION);
+let LOCATION = Object.assign({}, DEFAULT_LOCATION),
+    server;
 
 function clickXcodeDebugLocationSync(position) {
   try {
-    child_process.spawnSync(
+    let output = childProcess.spawnSync(
       'osascript',
       ['click.applescript'],
       {cwd: path.join(__dirname, '../')}
     );
-    console.log('  CLICKED XCode to simulate lat: ' + position.lat + ' lng: ' + position.lng);
-  } catch(ex) {
-    console.log('  ERROR clicking XCode to simulate lat: ' + position.lat + ' lng: ' + position.lng);
+
+    if (output.status === 0) {
+      console.log('  CLICKED XCode to simulate lat: ' + position.lat + ' lng: ' + position.lng);
+    } else {
+      console.log('  ERROR clicking XCode (make sure Xcode is debugging app)');
+    }
+  } catch (ex) {
+    console.log('  ERROR running AppleScript process to click XCode');
   }
 }
 
@@ -37,9 +42,11 @@ function writeLocationFileSync(position) {
     gpx: {
       '@creator': 'Xcode',
       '@version': 1.1,
+
       wpt: {
         '@lat': position.lat,
         '@lon': position.lng,
+
         name: {
           '#text': 'pokemonLocation'
         }
@@ -83,7 +90,7 @@ function loadSavedLocationFromFileSync() {
       }
     });
   } else {
-    console.log('No location file [' + LOCATION_FILE + '] - using default location.')
+    console.log('No location file [' + LOCATION_FILE + '] - using default location.');
   }
 }
 
@@ -132,7 +139,7 @@ app.use((req, res, next) => {
 });
 
 // error handler
-app.use((err, req, res, next) => {
+app.use((err, req, res, next) => {  // eslint-disable-line no-unused-vars
   let resp = [];
   resp.message = err.message;
   resp.error = req.app.get('env') === 'development' ? err : {};
@@ -144,6 +151,6 @@ app.use((err, req, res, next) => {
 
 loadSavedLocationFromFileSync();
 
-const server = app.listen(8080, () => {
-  console.log("Listening on port %s...", server.address().port);
+server = app.listen(8080, () => {
+  console.log('Listening on port %s...', server.address().port);
 });
