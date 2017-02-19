@@ -2,9 +2,17 @@ import { throttle } from 'lodash';
 import locationService from './services/location';
 import walking from './utils/walking';
 import directions from './utils/directions';
+import './app.scss';
 
 const UPDATE_LIMIT_MS = 375;
 const CURRENT_WALK_SPEED = walking.SPEEDS.faster;
+const STATES = {
+  MANUAL: 'MANUAL',                         // no walking, all manual control
+  DROPPING_PIN: 'DROPPING_PIN',             // dropping pin, no direction set yet
+  SETTING_DIRECTIONS: 'SETTING_DIRECTIONS', // pin dropped, directions can still be changed
+  WALKING: 'WALKING',                       // walking in progress, no direction changes, no manual control
+  WALKING_PAUSED: 'WALKING_PAUSED'          // walking paused, no direction changes, no manual control
+};
 
 var gmap,
 
@@ -17,6 +25,15 @@ var gmap,
   walkingRoutePoints,
   walkingPointIndex,
   walkingInterval,
+
+  currentState = STATES.MANUAL,
+
+  dropPinControl,
+  cancelPinControl,
+  startWalkingControl,
+  pauseWalkingControl,
+  continueWalkingControl,
+  stopWalkingControl,
 
   markers;
 
@@ -59,6 +76,7 @@ function fetchDirections() {
     if (status === 'OK') {
       nextLocationMarker.setVisible(false);
       directionsDisplay.setDirections(response);
+      directionsDisplay.setMap(gmap);
       return response;
     } else {
       console.log('Directions request failed with status: ', status);
@@ -70,14 +88,20 @@ function fetchDirections() {
 }
 
 function pinDrop() {
+  currentState = STATES.DROPPING_PIN;
+  updateMapControlsForState();
+
   nextLocationMarker.setPosition({lat: currentLocation.lat, lng: currentLocation.lng + 0.0002});
   nextLocationMarker.setAnimation(google.maps.Animation.BOUNCE);
   nextLocationMarker.setVisible(true);
 }
 
 function cancelPinAndDirections() {
+  currentState = STATES.MANUAL;
+  updateMapControlsForState();
+
   nextLocationMarker.setVisible(false);
-  directionsDisplay.setVisible(false);
+  directionsDisplay.setMap(null);
 }
 
 function isCurrentLocationAtPoint(point) {
@@ -98,7 +122,7 @@ function autoWalkStep() {
     if (walkingPointIndex === walkingRoutePoints.length - 1) {
       console.log('End of walk. Cancelling Interval');
       shouldMove = false;
-      stopWalking();
+      pauseWalking();
       cancelPinAndDirections();
     } else {
       walkingPointIndex++;
@@ -114,12 +138,40 @@ function autoWalkStep() {
   }
 }
 
-function stopWalking() {
+function pauseWalking() {
   clearInterval(walkingInterval);
+
+  // allow changing directions and manually moving
+  directionsDisplay.setOptions({draggable: true});
+  currentLocationMarker.setDraggable(true);
+
+  currentState = STATES.WALKING_PAUSED;
+  updateMapControlsForState();
 }
 
 function continueWalking() {
+  currentState = STATES.WALKING;
+  updateMapControlsForState();
+
+  // prevent changing directions or manually moving marker while walking
+  directionsDisplay.setOptions({draggable: false});
+  currentLocationMarker.setDraggable(false);
+
+  // move marker
   walkingInterval = setInterval(autoWalkStep, UPDATE_LIMIT_MS);
+}
+
+function stopWalking() {
+  pauseWalking();
+  cancelPinAndDirections();
+}
+
+function togglePauseContinueWalking() {
+  if (currentState === STATES.WALKING) {
+    pauseWalking();
+  } else if (currentState === STATES.WALKING_PAUSED) {
+    continueWalking();
+  }
 }
 
 function startWalking() {
@@ -128,26 +180,72 @@ function startWalking() {
   walkingRoutePoints = directions.getRoutePoints(currentDirs);
   walkingPointIndex = 0;
 
-  console.log('walking ' + walkingRoutePoints.length + ' points...');
+  console.log('Walking ' + walkingRoutePoints.length + ' points...');
 
-  markers = [];
-  for (let i = 0; i < walkingRoutePoints.length; i++) {
-    markers.push(new google.maps.Marker({
-      position: walkingRoutePoints[i],
-      map: gmap,
-      title: 'Route Marker ' + i,
-      label: i + ' ' + i + ' ' + i + ' ' + i,
-      icon: '//maps.google.com/mapfiles/ms/icons/blue-dot.png'
-    }));
-  }
+  // markers = [];
+  // for (let i = 0; i < walkingRoutePoints.length; i++) {
+  //   markers.push(new google.maps.Marker({
+  //     position: walkingRoutePoints[i],
+  //     map: gmap,
+  //     title: 'Route Marker ' + i,
+  //     label: i + ' ' + i + ' ' + i + ' ' + i,
+  //     icon: '//maps.google.com/mapfiles/ms/icons/blue-dot.png'
+  //   }));
+  // }
 
   continueWalking();
 }
 
-function initMap(initialLocation) {
+function initMapControls() {
+  dropPinControl = document.getElementById('drop-pin-control-div');
+  cancelPinControl = document.getElementById('cancel-pin-control-div');
+  startWalkingControl = document.getElementById('start-walking-control-div');
+  pauseWalkingControl = document.getElementById('pause-walking-control-div');
+  continueWalkingControl = document.getElementById('continue-walking-control-div');
+  stopWalkingControl = document.getElementById('stop-walking-control-div');
+
+  dropPinControl.addEventListener('click', pinDrop);
+  cancelPinControl.addEventListener('click', cancelPinAndDirections);
+  startWalkingControl.addEventListener('click', startWalking);
+  pauseWalkingControl.addEventListener('click', pauseWalking);
+  continueWalkingControl.addEventListener('click', continueWalking);
+  stopWalkingControl.addEventListener('click', stopWalking);
+}
+
+function updateMapControlsForState() {
+  // get rid of walking controls and re-add them - this seems to be the best way to let gmaps position them
+  gmap.controls[google.maps.ControlPosition.TOP_RIGHT].clear();
+
+  switch (currentState) {
+    case STATES.MANUAL:
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(dropPinControl);
+      break;
+
+    case STATES.DROPPING_PIN:
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(cancelPinControl);
+      break;
+
+    case STATES.SETTING_DIRECTIONS:
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(cancelPinControl);
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(startWalkingControl);
+      break;
+
+    case STATES.WALKING:
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(pauseWalkingControl);
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(stopWalkingControl);
+      break;
+
+    case STATES.WALKING_PAUSED:
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(continueWalkingControl);
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(stopWalkingControl);
+      break;
+  }
+}
+
+function initMap() {
   gmap = new google.maps.Map(document.getElementById('map'), {
     zoom: 18,
-    center: initialLocation,
+    center: currentLocation,
     streetViewControl: false
   });
 
@@ -163,21 +261,20 @@ function initMap(initialLocation) {
       travelDist = directions.computeTravelDistance(currentDirs),
       directDist = google.maps.geometry.spherical.computeDistanceBetween(currentDirs.request.origin, currentDirs.request.destination);
 
-    directionsDisplay.setVisible(true);
     console.log('Total travel distance (meters): ', travelDist);
     console.log('Origin to destination direct distance (meters): ', directDist);
     console.log('');
   });
 
   currentLocationMarker = new google.maps.Marker({
-    position: initialLocation,
+    position: currentLocation,
     draggable: true,
     map: gmap,
     title: 'Current Location'
   });
 
   nextLocationMarker = new google.maps.Marker({
-    position: initialLocation,
+    position: currentLocation,
     animation: google.maps.Animation.BOUNCE,
     draggable: true,
     map: gmap,
@@ -196,18 +293,21 @@ function initMap(initialLocation) {
   });
 
   google.maps.event.addListener(nextLocationMarker, 'dragend', () => {
+    currentState = STATES.SETTING_DIRECTIONS;
+    updateMapControlsForState();
+
     fetchDirections();
   });
 }
 
-function initLocation() {
+function initLocation(callback) {
   locationService.getLocation((err, response) => {
     if (err) {
       console.log('Error fetching location:');
       console.log(err);
     } else {
       setCurrentLocation(response);
-      initMap(currentLocation);
+      callback();
     }
   });
 }
@@ -274,13 +374,12 @@ document.onkeypress = (evt) => {
     case 74:
     case 106:
       stopWalking();
-      cancelPinAndDirections();
       break;
 
-    // k or K - pause walking
+    // k or K - pause or continue walking
     case 75:
     case 107:
-      stopWalking();
+      togglePauseContinueWalking();
       break;
 
     // l or L - start walking
@@ -300,4 +399,8 @@ document.onkeypress = (evt) => {
 
 /***** RUN *****/
 
-initLocation();
+initLocation(() => {
+  initMap();
+  initMapControls();
+  updateMapControlsForState();
+});

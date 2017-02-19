@@ -3,7 +3,7 @@
   <head>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
-    <title>POGO Location Controller</title>
+    <title>Location Controller</title>
 
     <style>
       /* Always set the map height explicitly to define the size of the div
@@ -21,6 +21,42 @@
   </head>
   <body>
     <div id="map"></div>
+
+    <div id="drop-pin-control-div" class="control-div">
+      <div id= "drop-pin-control-ui" class="control-ui" title="Click to drop a pin at a new walk destination.">
+        Walk
+      </div>
+    </div>
+
+    <div id="cancel-pin-control-div" class="control-div">
+      <div id= "cancel-pin-control-ui" class="control-ui" title = "Click to cancel pin drop.">
+        Cancel
+      </div>
+    </div>
+
+    <div id="start-walking-control-div" class="control-div">
+      <div id= "start-walking-control-ui" class="control-ui" title = "Click to start walking.">
+        Start
+      </div>
+    </div>
+
+    <div id="pause-walking-control-div" class="control-div">
+      <div id= "pause-walking-control-ui" class="control-ui" title = "Click to pause walking.">
+        Pause
+      </div>
+    </div>
+
+    <div id="continue-walking-control-div" class="control-div">
+      <div id= "continue-walking-control-ui" class="control-ui" title = "Click to continue walking.">
+        Continue
+      </div>
+    </div>
+
+    <div id="stop-walking-control-div" class="control-div">
+      <div id= "stop-walking-control-ui" class="control-ui" title = "Click to stop walking.">
+        Stop
+      </div>
+    </div>
 
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB-_iZCx1LmzYesgQ_5ntAL-p5EVwlGTZ8"></script>
   </body>
