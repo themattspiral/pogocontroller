@@ -1,36 +1,61 @@
-import {throttle} from 'lodash';
-
+import { throttle } from 'lodash';
 import locationService from './services/location';
 import walking from './utils/walking';
+import directions from './utils/directions';
+import './app.scss';
 
-const CURRENT_WALK_SPEED = walking.WALK_SPEEDS.faster;
-const UPDATE_THROTTLE_LIMIT_MS = 375;
+const UPDATE_LIMIT_MS = 375;
+const CURRENT_WALK_SPEED = walking.SPEEDS.faster;
+const STATES = {
+  MANUAL: 'MANUAL',                         // no walking, all manual control
+  DROPPING_PIN: 'DROPPING_PIN',             // dropping pin, no direction set yet
+  SETTING_DIRECTIONS: 'SETTING_DIRECTIONS', // pin dropped, directions can still be changed
+  WALKING: 'WALKING',                       // walking in progress, no direction changes, no manual control
+  WALKING_PAUSED: 'WALKING_PAUSED'          // walking paused, no direction changes, no manual control
+};
 
-var currentLocation,
-  locationMarker,
-  map;
+var gmap,
 
-const throttledPushLocationUpdate = throttle((position) => {
-  locationService.updateLocation(position, (err) => {
+  currentLocation,
+  currentLocationMarker,
+  nextLocationMarker,
+
+  directionsService,
+  directionsDisplay,
+  walkingRoutePoints,
+  walkingPointIndex,
+  walkingInterval,
+
+  currentState = STATES.MANUAL,
+
+  dropPinControl,
+  cancelPinControl,
+  startWalkingControl,
+  pauseWalkingControl,
+  continueWalkingControl,
+  stopWalkingControl;
+
+const throttledPushLocationUpdate = throttle((location) => {
+  locationService.updateLocation(location, (err) => {
     if (err) {
       console.log('Error updating location:');
       console.log(err);
 
       // reset
-      locationMarker.setPosition(currentLocation);
+      currentLocationMarker.setPosition(currentLocation);
     }
   });
-}, UPDATE_THROTTLE_LIMIT_MS);
+}, UPDATE_LIMIT_MS);
 
-function setCurrentLocation(position) {
+function setCurrentLocation(location) {
   currentLocation = {
-    lat: position.lat,
-    lng: position.lng
+    lat: location.lat,
+    lng: location.lng
   };
 }
 
 function updateLocationTo(location) {
-  locationMarker.setPosition(location);
+  currentLocationMarker.setPosition(location);
 
   // optimistically update in-memory location before confirming that server update was successful
   setCurrentLocation(location);
@@ -38,42 +63,245 @@ function updateLocationTo(location) {
   throttledPushLocationUpdate(location);
 }
 
-function initMap(initialLocation) {
-  map = new google.maps.Map(document.getElementById('map'), {
+function fetchDirections() {
+  let request = {
+    origin: currentLocationMarker.getPosition(),
+    destination: nextLocationMarker.getPosition(),
+    travelMode: google.maps.TravelMode.WALKING
+  };
+
+  directionsService.route(request, function(response, status) {
+    if (status === 'OK') {
+      nextLocationMarker.setVisible(false);
+      directionsDisplay.setDirections(response);
+      directionsDisplay.setMap(gmap);
+      return response;
+    } else {
+      console.log('Directions request failed with status: ', status);
+      console.log(response);
+
+      return null;
+    }
+  });
+}
+
+function pinDrop() {
+  currentState = STATES.DROPPING_PIN;
+  updateMapControlsForState();
+
+  nextLocationMarker.setPosition({lat: currentLocation.lat, lng: currentLocation.lng + 0.0002});
+  nextLocationMarker.setAnimation(google.maps.Animation.BOUNCE);
+  nextLocationMarker.setVisible(true);
+}
+
+function cancelPinAndDirections() {
+  currentState = STATES.MANUAL;
+  updateMapControlsForState();
+
+  nextLocationMarker.setVisible(false);
+  directionsDisplay.setMap(null);
+}
+
+function isCurrentLocationAtPoint(point) {
+  let currentPoint = new google.maps.LatLng(currentLocation.lat, currentLocation.lng),
+    dist = google.maps.geometry.spherical.computeDistanceBetween(currentPoint, point);
+
+  // TODO make this dynamic based on current step size
+  return dist <= 0.8; // roughly 2 steps away, maybe a little more
+}
+
+function autoWalkStep() {
+  let shouldMove = true;
+
+  console.log('Checking point: ', walkingPointIndex);
+
+  if (isCurrentLocationAtPoint(walkingRoutePoints[walkingPointIndex])) {
+    console.log('Current Location close Enough to target point.');
+
+    if (walkingPointIndex === walkingRoutePoints.length - 1) {
+      console.log('End of walk. Cancelling Interval');
+      shouldMove = false;
+      pauseWalking();
+      cancelPinAndDirections();
+    } else {
+      walkingPointIndex++;
+      console.log('Now checking point: ', walkingPointIndex);
+    }
+  }
+
+  if (shouldMove) {
+    let targetLocation = directions.pointToLocation(walkingRoutePoints[walkingPointIndex]),
+      changedLocation = walking.stepToward(currentLocation, CURRENT_WALK_SPEED, targetLocation);
+
+    updateLocationTo(changedLocation);
+  }
+}
+
+function pauseWalking() {
+  clearInterval(walkingInterval);
+
+  // allow changing directions and manually moving
+  directionsDisplay.setOptions({draggable: true});
+  currentLocationMarker.setDraggable(true);
+
+  currentState = STATES.WALKING_PAUSED;
+  updateMapControlsForState();
+}
+
+function continueWalking() {
+  currentState = STATES.WALKING;
+  updateMapControlsForState();
+
+  // prevent changing directions or manually moving marker while walking
+  directionsDisplay.setOptions({draggable: false});
+  currentLocationMarker.setDraggable(false);
+
+  // move marker
+  walkingInterval = setInterval(autoWalkStep, UPDATE_LIMIT_MS);
+}
+
+function stopWalking() {
+  pauseWalking();
+  cancelPinAndDirections();
+}
+
+function togglePauseContinueWalking() {
+  if (currentState === STATES.WALKING) {
+    pauseWalking();
+  } else if (currentState === STATES.WALKING_PAUSED) {
+    continueWalking();
+  }
+}
+
+function startWalking() {
+  let currentDirs = directionsDisplay.getDirections();
+
+  walkingRoutePoints = directions.getRoutePoints(currentDirs);
+  walkingPointIndex = 0;
+
+  console.log('Walking ' + walkingRoutePoints.length + ' points...');
+
+  continueWalking();
+}
+
+function initMapControls() {
+  dropPinControl = document.getElementById('drop-pin-control-div');
+  cancelPinControl = document.getElementById('cancel-pin-control-div');
+  startWalkingControl = document.getElementById('start-walking-control-div');
+  pauseWalkingControl = document.getElementById('pause-walking-control-div');
+  continueWalkingControl = document.getElementById('continue-walking-control-div');
+  stopWalkingControl = document.getElementById('stop-walking-control-div');
+
+  dropPinControl.addEventListener('click', pinDrop);
+  cancelPinControl.addEventListener('click', cancelPinAndDirections);
+  startWalkingControl.addEventListener('click', startWalking);
+  pauseWalkingControl.addEventListener('click', pauseWalking);
+  continueWalkingControl.addEventListener('click', continueWalking);
+  stopWalkingControl.addEventListener('click', stopWalking);
+}
+
+function updateMapControlsForState() {
+  // get rid of walking controls and re-add them - this seems to be the best way to let gmaps position them
+  gmap.controls[google.maps.ControlPosition.TOP_RIGHT].clear();
+
+  switch (currentState) {
+    case STATES.MANUAL:
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(dropPinControl);
+      break;
+
+    case STATES.DROPPING_PIN:
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(cancelPinControl);
+      break;
+
+    case STATES.SETTING_DIRECTIONS:
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(cancelPinControl);
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(startWalkingControl);
+      break;
+
+    case STATES.WALKING:
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(pauseWalkingControl);
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(stopWalkingControl);
+      break;
+
+    case STATES.WALKING_PAUSED:
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(continueWalkingControl);
+      gmap.controls[google.maps.ControlPosition.TOP_RIGHT].push(stopWalkingControl);
+      break;
+  }
+}
+
+function initMap() {
+  gmap = new google.maps.Map(document.getElementById('map'), {
     zoom: 18,
-    center: initialLocation
+    center: currentLocation,
+    streetViewControl: false
   });
 
-  locationMarker = new google.maps.Marker({
-    position: initialLocation,
+  directionsService = new google.maps.DirectionsService();
+  directionsDisplay = new google.maps.DirectionsRenderer({
     draggable: true,
-    map: map,
+    map: gmap,
+    preserveViewport: true
+  });
+
+  directionsDisplay.addListener('directions_changed', function() {
+    let currentDirs = directionsDisplay.getDirections(),
+      travelDist = directions.computeTravelDistance(currentDirs),
+      directDist = google.maps.geometry.spherical.computeDistanceBetween(currentDirs.request.origin, currentDirs.request.destination);
+
+    console.log('Total travel distance (meters): ', travelDist);
+    console.log('Origin to destination direct distance (meters): ', directDist);
+    console.log('');
+  });
+
+  currentLocationMarker = new google.maps.Marker({
+    position: currentLocation,
+    draggable: true,
+    map: gmap,
     title: 'Current Location'
   });
 
-  google.maps.event.addListener(locationMarker, 'dragend', () => {
-    let position = locationMarker.getPosition();
+  nextLocationMarker = new google.maps.Marker({
+    position: currentLocation,
+    animation: google.maps.Animation.BOUNCE,
+    draggable: true,
+    map: gmap,
+    title: 'Destination Location',
+    visible: false,
+    icon: '//maps.google.com/mapfiles/ms/icons/blue-dot.png'
+  });
+
+  google.maps.event.addListener(currentLocationMarker, 'dragend', () => {
+    let position = currentLocationMarker.getPosition();
 
     updateLocationTo({
       lat: position.lat(),
       lng: position.lng()
     });
   });
+
+  google.maps.event.addListener(nextLocationMarker, 'dragend', () => {
+    currentState = STATES.SETTING_DIRECTIONS;
+    updateMapControlsForState();
+
+    fetchDirections();
+  });
 }
 
-function initLocation() {
+function initLocation(callback) {
   locationService.getLocation((err, response) => {
     if (err) {
       console.log('Error fetching location:');
       console.log(err);
     } else {
       setCurrentLocation(response);
-      initMap(currentLocation);
+      callback();
     }
   });
 }
 
 document.onkeypress = (evt) => {
+
   let changedLocation;
 
   switch (evt.which) {
@@ -117,6 +345,39 @@ document.onkeypress = (evt) => {
     case 120:
       changedLocation = walking.stepSoutheast(currentLocation, CURRENT_WALK_SPEED);
       break;
+
+    // o or O - cancel drop pin and/or directions
+    case 79:
+    case 111:
+      cancelPinAndDirections();
+      break;
+
+    // p or P - drop pin
+    case 80:
+    case 112:
+      pinDrop();
+      break;
+
+    // j or J - stop walking
+    case 74:
+    case 106:
+      stopWalking();
+      break;
+
+    // k or K - pause or continue walking
+    case 75:
+    case 107:
+      togglePauseContinueWalking();
+      break;
+
+    // l or L - start walking
+    case 76:
+    case 108:
+      startWalking();
+      break;
+
+    default:
+      break;
   }
 
   if (changedLocation) {
@@ -124,4 +385,10 @@ document.onkeypress = (evt) => {
   }
 };
 
-initLocation();
+/***** RUN *****/
+
+initLocation(() => {
+  initMap();
+  initMapControls();
+  updateMapControlsForState();
+});

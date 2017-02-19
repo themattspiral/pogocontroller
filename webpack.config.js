@@ -32,6 +32,16 @@ module.exports = {
         test: /\.js$/,
         loader: "babel-loader",
         exclude: /node_modules/
+      },
+
+      {
+        test: /\.scss/,
+        // include: [__dirname + '/client/app.scss'],
+        loader: [
+          'style-loader?sourceMap',
+          'css-loader?sourceMap',
+          'sass-loader?sourceMap'
+        ]
       }
     ]
 
