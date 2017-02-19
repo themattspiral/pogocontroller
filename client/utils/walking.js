@@ -1,7 +1,7 @@
 import Chance from 'chance';
 const chance = new Chance();
 
-const WALK_SPEEDS = {
+const SPEEDS = {
   slow() {return chance.floating({fixed:12, min: 0.0000009, max: 0.0000013});},
   medium() {return chance.floating({fixed:12, min: 0.000001, max: 0.000002});},
   fast() {return chance.floating({fixed:12, min: 0.000002, max: 0.000003});},
@@ -17,7 +17,7 @@ function getRandomness(speed) {
 }
 
 module.exports = {
-  WALK_SPEEDS,
+  SPEEDS,
 
   stepNorth(currentLocation, speed) {
     let r = getRandomness(speed);
@@ -90,4 +90,37 @@ module.exports = {
       lng: currentLocation.lng + r.coordDelta
     };
   },
+
+  stepToward(currentLocation, speed, targetLocation) {
+    let stepFunction,
+      latDiff = currentLocation.lat - targetLocation.lat,
+      lngDiff = currentLocation.lng - targetLocation.lng,
+      latDiffLarger = Math.abs(latDiff) > Math.abs(lngDiff),
+      isCurrentlyNorth,
+      isCurrentlyEast;
+
+    isCurrentlyNorth = latDiff > 0;
+    isCurrentlyEast = lngDiff > 0;
+
+    // move north or south
+    if (latDiffLarger) {
+      if (isCurrentlyNorth) {
+        stepFunction = this.stepSouth;
+        console.log('stepping south');
+      } else {
+        stepFunction = this.stepNorth;
+        console.log('stepping north');
+      }
+    } else {
+      if (isCurrentlyEast) {
+        stepFunction = this.stepWest;
+        console.log('stepping west');
+      } else {
+        stepFunction = this.stepEast;
+        console.log('stepping east');
+      }
+    }
+
+    return stepFunction(currentLocation, speed);
+  }
 };
